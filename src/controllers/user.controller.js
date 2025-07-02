@@ -1,25 +1,26 @@
 
 import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/apiError.js";
+import { ApiResponse } from "../utils/apiResponse.js";
 import { asychandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 
-const generatereFreshandAccessTokens = async(userId)=>{
+const generateAccessAndRefereshTokens = async(userId) =>{
+    try {
+        const user = await User.findById(userId)
+        const accessToken = user.generateAccessToken()
+        const refreshToken = user.generateRefreshToken()
 
-   try {
-    const user = await User.findById(userId);;
-     const accessToken = await user.generateAccessToken();
-     const refreshToken = await user.generateRefreshToken();
-        // set the refresh token in the user document
-        user.refreshToken = refreshToken;
-        await user.save({validateBeforeSave:false});    // save the user with the new refresh token
-        // false because we don't want to validate the password again as we're not changing it
+        user.refreshToken = refreshToken
+        await user.save({ validateBeforeSave: false })
+
+        return {accessToken, refreshToken}
 
 
-        return ({accessToken,refreshToken})
-   } catch (error) {
-    throw new ApiError(500, "somthing went wrong while generating tokens");
-   }
+    } catch (error) {
+        console.error(error);
+        throw new ApiError(500, "Something went wrong while generating referesh and access token")
+    }
 }
 
 const registeruser = asychandler(async (req, res) => {
@@ -50,7 +51,7 @@ const registeruser = asychandler(async (req, res) => {
         throw new ApiError(401,"username or email is already present");
     }
 
-    console.log( "files",req.files);
+    console.log("files",req.files);
       const avatarLocalPath = req.files?.avatar[0]?.path;
     //const coverImageLocalPath = req.files?.coverImage[0]?.path;
 
@@ -58,6 +59,8 @@ const registeruser = asychandler(async (req, res) => {
     if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
         coverImageLocalPath = req.files.coverImage[0].path
     }
+    console.log("avatarLocalPath",avatarLocalPath);
+    console.log("coverImageLocalPath",coverImageLocalPath);
 
      if (!avatarLocalPath) {
         throw new ApiError(400, "Avatar file is required")
@@ -100,7 +103,7 @@ const loginuser = asychandler(async(req,res)=>{
 
     const {username, email, password} = req.body;
 
-    if(username.trim() == "" || email.trim() ==""){
+    if(!username && !email){
         throw new ApiError(400,"Username is required");
     }
     if(password.trim() == ""){
@@ -119,7 +122,7 @@ const loginuser = asychandler(async(req,res)=>{
         throw new ApiError(401,"Invalid password");
     }
 
-    const {accessToken,refreshToken}=await generatereFreshandAccessTokens(userExistance._id);
+    const {accessToken,refreshToken}=await generateAccessAndRefereshTokens(userExistance._id);
     const loggedInUser = await User.findById(userExistance._id).select("-password -refreshToken") // remove password and refresh token from response
 
 
@@ -128,10 +131,11 @@ const loginuser = asychandler(async(req,res)=>{
         secure:true
        
     };
-    return res.status(200).
-            cookie.set("accessToken", accessToken,options).
-            cookie.set("refreshToken",refreshToken,options).
-            json( new ApiResponse(200,{user:loggedInUser,accessToken,refreshToken}, // we're passing access token and refresh token in response for mobile app
+    return res
+            .status(200)
+            .cookie("accessToken", accessToken,options)
+            .cookie("refreshToken",refreshToken,options)
+            .json( new ApiResponse(200,{user:loggedInUser,accessToken,refreshToken}, // we're passing access token and refresh token in response for mobile app
                 "User logged in successfully"));
   
 })
@@ -140,12 +144,71 @@ const loginuser = asychandler(async(req,res)=>{
 const logoutuser = asychandler(async(req,res)=>{
     // 1st need to pass the user id in the request
     // in logout need to remove cookies and refresh token from db
+   await User.findByIdAndUpdate(
+        req.user._id,
+    {
+        $set:{refreshToken:undefined},
+    },
+    {
+        new:true,  // return the updated user
+    },
     
+    );
+    const options = {
+        httpOnly: true,
+        secure:true
+    }
+
+    return res.status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json( new ApiResponse(200, {}, "User logged out successfully"));
 })
+
+const refreshAccessToken = asychandler(async(req,res)=>{
+
+    const refreshAccessToken = req.cookies.refreshToken || req.body.refreshToken ;
+
+    if(!refreshAccessToken){
+        throw new ApiError(401, "Refresh token is missing or invalid");
+    }
+
+   try {
+     const decodedRefreshToken = jwt.verify(refreshAccessToken, process.env.REFRESH_TOKEN_SECRECT);
+     console.log("Decoded Refresh Token:", decodedRefreshToken);
+ 
+     const user = await User.findById(decodedRefreshToken?._id);
+ 
+      if(!user){
+         throw new ApiError(401, "Invalid refresh token or user not found");
+     }
+     if(refreshAccessToken !== user.refreshToken){
+         throw new ApiError(401, "Refresh token does not match");
+     }
+ 
+     const {accessToken, newrefreshToken} = await generateAccessAndRefereshTokens(user._id);
+ 
+     const options = {
+         httpOnly: true,
+         secure:true
+     };
+ 
+     return res
+         .status(200)
+         .cookie("accessToken", accessToken, options)
+         .cookie("refreshToken", refreshToken, options)
+         .json(new ApiResponse(200, { accessToken, refreshToken: newrefresh},"Access token refreshed successfully"));
+ 
+   } catch (error) {
+     console.error("Error refreshing access token:", error);
+     throw new ApiError(401, "Refresh token is missing or invalid");
+    
+   }})
 
 export { registeruser,
         loginuser,
-        logoutuser
+        logoutuser,
+        refreshAccessToken
 };
 // This controller handles user registration.
 // This controller handles user login.

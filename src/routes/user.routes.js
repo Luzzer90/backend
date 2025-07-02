@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { loginuser, logoutuser, registeruser } from "../controllers/user.controller.js";
+import { loginuser, logoutuser, refreshAccessToken, registeruser } from "../controllers/user.controller.js";
 import { upload } from "../middleware/multer.middleware.js";
 import { verifyJWT } from "../middleware/auth.middleware.js";
 const router = Router();
@@ -21,7 +21,9 @@ router.route("/register").post(
 
     router.route("/login").post(loginuser);
     // secure routes
-    router.route("/logout").post(verifyJWT, logoutuser)
+    router.route("/logout").post(verifyJWT, logoutuser);
 
+    router.route("/refresh").post(refreshAccessToken);
+    
 export default router;
 // This file defines the user routes for the application.

@@ -1,6 +1,6 @@
-import { User } from "../models/user.model";
-import { ApiError } from "../utils/apiError";
-import { asychandler } from "../utils/asyncHandler";
+import { User } from "../models/user.model.js";
+import { ApiError } from "../utils/apiError.js";
+import { asychandler } from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken";
 
 export const verifyJWT = asychandler(async (req, res, next) => {
@@ -12,11 +12,13 @@ export const verifyJWT = asychandler(async (req, res, next) => {
         throw new ApiError(401, "Access token is missing or invalid");
     }
  
-    const decodedAccesToken = jwt.verify(accessToken,process.env.ACCESS_TOKEN_SECRECT);
+    const decodedAccesToken = jwt.verify(accessToken,process.env.ACCESS_TOKEN_SECRET);
+    console.log("Decoded Access Token:", decodedAccesToken);
     // while generating access token we have added id
     // so we can use that id to find the user in the database
-    const user = await User.findOne(decodedAccesToken?._id).select("-password -refreshToken"); // exclude password and refreshToken from the user object
- 
+    const user = await User.findById(decodedAccesToken?._id).select("-password -refreshToken"); // exclude password and refreshToken from the user object
+    console.log("User from Access Token:", user);
+    
      if(!user) {
           throw new ApiError(401, "User not found or access token is invalid");
      }
@@ -26,7 +28,7 @@ export const verifyJWT = asychandler(async (req, res, next) => {
      next();
    } catch (error) {
     console.error("Error verifying JWT:", error);
-     throw new ApiError(401, "Access token is missing or invalid");
+     throw new ApiError(401, "Access token is missing or invalid or expired");
     
    }
 });
