@@ -205,10 +205,61 @@ const refreshAccessToken = asychandler(async(req,res)=>{
     
    }})
 
+   const chnageCurrentUserPwd = asychandler(async(req,res)=>{
+     const {oldPwd,newPwd} = req.body;
+        if(!oldPwd || !newPwd){
+            throw new ApiError(400, "Old password and new password are required");
+        }
+        if(oldPwd === newPwd){
+            throw new ApiError(400, "Old password and new password cannot be the same");
+        }
+
+        const user = await User.findById(req.user?._id);
+        const pwdCheck =await user.isPasswordCorrect(oldPwd);   // check if old password is correct
+        if(!pwdCheck){
+            throw new ApiError(401, "Old password is incorrect");
+        }
+
+        user.password = newPwd;
+        await user.save({ validateBeforeSave: false });  // this will not validate the user schema before saving
+
+        return res.status(200)
+                  .json(new ApiResponse(200, {}, "Password changed successfully"));
+   })
+
+const getCurrentUser = asychandler(async(req,res)=>{
+
+    return res.status(200).json(new ApiResponse(200, req.user, "Current user fetched successfully"));
+})
+
+const updateAccountDetails = asychandler(async(req,res)=>{
+    const {fullName,email} = req.body;
+    if(!fullName || !email){
+        throw new ApiError(400, "Full name and email are required");
+    }
+
+    const user = await User.findByIdAndUpdate(req.user?._id,
+        {
+            $set:{
+                fullName,
+                email
+            },
+            
+        },
+        {new:true},
+    ).select("-password -refreshToken"); // remove password and refresh token from response
+
+    return res.status(200).
+                json(new ApiResponse(200, user, "Account details updated successfully"));   
+})
+
 export { registeruser,
         loginuser,
         logoutuser,
-        refreshAccessToken
+        refreshAccessToken,
+        chnageCurrentUserPwd,
+        getCurrentUser,
+        updateAccountDetails,
 };
 // This controller handles user registration.
 // This controller handles user login.
