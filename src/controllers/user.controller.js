@@ -253,6 +253,49 @@ const updateAccountDetails = asychandler(async(req,res)=>{
                 json(new ApiResponse(200, user, "Account details updated successfully"));   
 })
 
+const updateUserAvatar = asychandler(async(req,res)=>{
+    const avaterLocalPath = req.file?.path;
+    if(!avaterLocalPath){
+        throw new ApiError(400, "Avatar file is required");
+    }
+    const avater = await uploadOnCloudinary(avaterLocalPath);
+    if(!avater.url){
+        throw new ApiError(400, "error uploading avatar to cloudinary");
+    }
+    const user = await User.findByIdAndUpdate(req.uer?._id,
+        {
+            $set:{
+                avatar:avater.url
+            }
+        },
+        {new:true} // return the updated user
+    ).select("-password");
+
+    return res.status(200).json(new ApiResponse(200,user,"avatar updated successfully"));
+});
+
+const updateCoverImage = asychandler(async(req,res)=>{
+    const coverImagePath = req.file?.path; // get the cover image path from the request
+    if(!coverImagePath){
+        throw new ApiError(400, "Cover image file is required");
+    }
+    const coverImage = await uploadOnCloudinary(coverImagePath);
+    if(!coverImage.url){
+        throw new ApiError(400, "Error uploading cover image to cloudinary");
+    }
+    const user = await User.findByIdAndUpdate(req.user?._id,
+    {
+        $set:{
+            coverImage:coverImage.url
+        }
+    },
+    {new:true} // return the updated user
+    ).select("-password"); // remove password from response
+
+    return res.status(200).json(new ApiResponse(200,user,"Cover image updated successfully"));
+
+})
+
 export { registeruser,
         loginuser,
         logoutuser,
@@ -260,6 +303,8 @@ export { registeruser,
         chnageCurrentUserPwd,
         getCurrentUser,
         updateAccountDetails,
+        updateUserAvatar,
+        updateCoverImage
 };
 // This controller handles user registration.
 // This controller handles user login.
